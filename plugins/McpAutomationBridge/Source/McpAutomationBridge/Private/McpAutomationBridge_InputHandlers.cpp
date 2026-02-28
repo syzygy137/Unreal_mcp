@@ -207,6 +207,9 @@ bool UMcpAutomationBridgeSubsystem::HandleInputAction(
       return true;
     }
 
+    // Record undo state and mark package dirty so changes persist to disk
+    Context->Modify();
+
     FEnhancedActionKeyMapping &Mapping = Context->MapKey(InAction, Key);
 
     // Optional modifiers
@@ -279,6 +282,9 @@ bool UMcpAutomationBridgeSubsystem::HandleInputAction(
                           TEXT("NOT_FOUND"));
       return true;
     }
+
+    // Record undo state and mark package dirty so changes persist to disk
+    Context->Modify();
 
     // Context->UnmapAction(InAction); // Not available in 5.x
     TArray<FKey> KeysToRemove;
