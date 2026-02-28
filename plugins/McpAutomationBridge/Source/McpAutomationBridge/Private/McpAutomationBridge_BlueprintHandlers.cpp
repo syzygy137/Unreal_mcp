@@ -2719,8 +2719,12 @@ bool UMcpAutomationBridgeSubsystem::HandleBlueprintAction(
     // validation occurs even if variable already exists
     FEdGraphPinType PinType;
     const FString LowerType = VarType.ToLower();
-    if (LowerType == TEXT("float") || LowerType == TEXT("double")) {
-      PinType.PinCategory = MCP_PC_Float;
+    if (LowerType == TEXT("float") || LowerType == TEXT("double") || LowerType == TEXT("real")) {
+      // UE5: PC_Real category + PC_Double/PC_Float subcategory (required, crashes without it)
+      PinType.PinCategory = UEdGraphSchema_K2::PC_Real;
+      PinType.PinSubCategory = (LowerType == TEXT("float"))
+          ? UEdGraphSchema_K2::PC_Float
+          : UEdGraphSchema_K2::PC_Double;
     } else if (LowerType == TEXT("int") || LowerType == TEXT("integer")) {
       PinType.PinCategory = MCP_PC_Int;
     } else if (LowerType == TEXT("bool") || LowerType == TEXT("boolean")) {

@@ -370,6 +370,7 @@ export async function handleAnimationAuthoringTools(
           skeletonPath,
           slotName,
           save,
+          timeoutMs: 120000, // Asset creation can be slow on the game thread
         })) as AutomationResponse;
 
         if (res.success === false) {
