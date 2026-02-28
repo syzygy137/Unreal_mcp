@@ -853,6 +853,8 @@ export const consolidatedToolDefinitions: ToolDefinition[] = [
         contextPath: commonSchemas.assetPath,
         actionPath: commonSchemas.assetPath,
         key: commonSchemas.stringProp,
+        negate: { type: 'boolean', description: 'Add Negate modifier to the mapping (inverts input value). Used for S/A keys.' },
+        swizzle: { type: 'boolean', description: 'Add SwizzleAxis(YXZ) modifier to the mapping (swaps X/Y axes). Used for W/S keys.' },
         triggerType: commonSchemas.stringProp,
         modifierType: commonSchemas.stringProp,
         assetPath: commonSchemas.assetPath,

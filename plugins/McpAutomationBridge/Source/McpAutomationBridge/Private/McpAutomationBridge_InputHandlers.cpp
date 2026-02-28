@@ -15,6 +15,7 @@
 #include "Factories/Factory.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+#include "InputModifiers.h"
 
 #endif
 
@@ -208,6 +209,29 @@ bool UMcpAutomationBridgeSubsystem::HandleInputAction(
 
     FEnhancedActionKeyMapping &Mapping = Context->MapKey(InAction, Key);
 
+    // Optional modifiers
+    bool bNegate = false;
+    Payload->TryGetBoolField(TEXT("negate"), bNegate);
+    bool bSwizzle = false;
+    Payload->TryGetBoolField(TEXT("swizzle"), bSwizzle);
+
+    TArray<FString> ModifiersApplied;
+
+    if (bSwizzle) {
+      UInputModifierSwizzleAxis *SwizzleMod =
+          NewObject<UInputModifierSwizzleAxis>(Context);
+      SwizzleMod->Order = EInputAxisSwizzle::YXZ;
+      Mapping.Modifiers.Add(SwizzleMod);
+      ModifiersApplied.Add(TEXT("SwizzleAxis(YXZ)"));
+    }
+
+    if (bNegate) {
+      UInputModifierNegate *NegateMod =
+          NewObject<UInputModifierNegate>(Context);
+      Mapping.Modifiers.Add(NegateMod);
+      ModifiersApplied.Add(TEXT("Negate"));
+    }
+
     // Save changes
     SaveLoadedAssetThrottled(Context, -1.0, true);
 
@@ -215,6 +239,13 @@ bool UMcpAutomationBridgeSubsystem::HandleInputAction(
     Result->SetStringField(TEXT("contextPath"), SanitizedContextPath);
     Result->SetStringField(TEXT("actionPath"), SanitizedActionPath);
     Result->SetStringField(TEXT("key"), KeyName);
+    if (ModifiersApplied.Num() > 0) {
+      TArray<TSharedPtr<FJsonValue>> ModArray;
+      for (const FString &Mod : ModifiersApplied) {
+        ModArray.Add(MakeShared<FJsonValueString>(Mod));
+      }
+      Result->SetArrayField(TEXT("modifiers"), ModArray);
+    }
     AddAssetVerificationNested(Result, TEXT("contextVerification"), Context);
     AddAssetVerificationNested(Result, TEXT("actionVerification"), InAction);
     SendAutomationResponse(RequestingSocket, RequestId, true,

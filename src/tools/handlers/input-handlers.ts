@@ -14,7 +14,7 @@ function getTimeoutMs(): number {
 const VALID_PARAMS_BY_ACTION: Record<string, Set<string>> = {
     create_input_action: new Set(['action', 'name', 'path', 'timeoutMs']),
     create_input_mapping_context: new Set(['action', 'name', 'path', 'timeoutMs']),
-    add_mapping: new Set(['action', 'contextPath', 'actionPath', 'key', 'timeoutMs']),
+    add_mapping: new Set(['action', 'contextPath', 'actionPath', 'key', 'negate', 'swizzle', 'timeoutMs']),
     remove_mapping: new Set(['action', 'contextPath', 'actionPath', 'timeoutMs']),
     map_input_action: new Set(['action', 'contextPath', 'actionPath', 'key', 'timeoutMs']),
     set_input_trigger: new Set(['action', 'actionPath', 'triggerType', 'timeoutMs']),
@@ -197,7 +197,9 @@ export async function handleInputTools(
                 action: 'add_mapping',
                 contextPath: sanitizedContextPath,
                 actionPath: sanitizedActionPath,
-                key: argsTyped.key ?? ''
+                key: argsTyped.key ?? '',
+                ...(argsRecord.negate ? { negate: true } : {}),
+                ...(argsRecord.swizzle ? { swizzle: true } : {})
             }, undefined, { timeoutMs });
             return cleanObject(result) as Record<string, unknown>;
         }

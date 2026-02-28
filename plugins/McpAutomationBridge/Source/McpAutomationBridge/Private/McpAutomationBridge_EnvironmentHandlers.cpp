@@ -1151,15 +1151,48 @@ bool UMcpAutomationBridgeSubsystem::HandleInspectAction(
       return true;
     }
     else if (LowerSubAction.Equals(TEXT("get_performance_stats"))) {
+      // Frame timing
+      float DeltaTime = FApp::GetDeltaTime();
+      float FPS = (DeltaTime > 0.0f) ? (1.0f / DeltaTime) : 0.0f;
+      Resp->SetNumberField(TEXT("fps"), FPS);
+      Resp->SetNumberField(TEXT("frameTimeMs"), DeltaTime * 1000.0f);
+
+      // Average FPS/frame time (smoothed by engine)
+      extern ENGINE_API float GAverageFPS;
+      extern ENGINE_API float GAverageMS;
+      Resp->SetNumberField(TEXT("averageFps"), GAverageFPS);
+      Resp->SetNumberField(TEXT("averageFrameTimeMs"), GAverageMS);
+
+      // Uptime
+      Resp->SetNumberField(TEXT("uptimeSeconds"), FPlatformTime::Seconds());
+
       Resp->SetBoolField(TEXT("success"), true);
-      Resp->SetStringField(TEXT("message"), TEXT("Performance stats placeholder - implement with actual metrics"));
       SendAutomationResponse(RequestingSocket, RequestId, true,
                              TEXT("Performance stats retrieved"), Resp, FString());
       return true;
     }
     else if (LowerSubAction.Equals(TEXT("get_memory_stats"))) {
+      FPlatformMemoryStats MemStats = FPlatformMemory::GetStats();
+      Resp->SetNumberField(TEXT("totalPhysicalMB"),
+          MemStats.TotalPhysical / (1024.0 * 1024.0));
+      Resp->SetNumberField(TEXT("availablePhysicalMB"),
+          MemStats.AvailablePhysical / (1024.0 * 1024.0));
+      Resp->SetNumberField(TEXT("usedPhysicalMB"),
+          (MemStats.TotalPhysical - MemStats.AvailablePhysical) / (1024.0 * 1024.0));
+      Resp->SetNumberField(TEXT("totalVirtualMB"),
+          MemStats.TotalVirtual / (1024.0 * 1024.0));
+      Resp->SetNumberField(TEXT("availableVirtualMB"),
+          MemStats.AvailableVirtual / (1024.0 * 1024.0));
+      Resp->SetNumberField(TEXT("usedVirtualMB"),
+          (MemStats.TotalVirtual - MemStats.AvailableVirtual) / (1024.0 * 1024.0));
+
+      // Process memory from platform stats
+      Resp->SetNumberField(TEXT("peakUsedPhysicalMB"),
+          MemStats.PeakUsedPhysical / (1024.0 * 1024.0));
+      Resp->SetNumberField(TEXT("peakUsedVirtualMB"),
+          MemStats.PeakUsedVirtual / (1024.0 * 1024.0));
+
       Resp->SetBoolField(TEXT("success"), true);
-      Resp->SetStringField(TEXT("message"), TEXT("Memory stats placeholder - implement with actual metrics"));
       SendAutomationResponse(RequestingSocket, RequestId, true,
                              TEXT("Memory stats retrieved"), Resp, FString());
       return true;
