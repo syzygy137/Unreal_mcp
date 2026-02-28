@@ -22,6 +22,8 @@
 #include "K2Node_FunctionResult.h"
 #include "K2Node_IfThenElse.h"
 #include "K2Node_InputAxisEvent.h"
+#include "K2Node_EnhancedInputAction.h"
+#include "InputAction.h"
 #include "K2Node_Knot.h"
 #include "K2Node_Literal.h"
 #include "K2Node_MakeArray.h"
@@ -38,6 +40,13 @@
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "ScopedTransaction.h"
+
+// AnimGraph node support for set_node_property
+#include "AnimGraphNode_SequencePlayer.h"
+#include "AnimGraphNode_SequenceEvaluator.h"
+#include "AnimGraphNode_ModifyBone.h"
+#include "Animation/AnimSequence.h"
+#include "Animation/AnimBlueprint.h"
 
 #endif
 
@@ -690,6 +699,56 @@ bool UMcpAutomationBridgeSubsystem::HandleBlueprintGraphAction(
       return true;
     }
 
+    if (NodeType == TEXT("EnhancedInputAction") ||
+        NodeType == TEXT("K2Node_EnhancedInputAction")) {
+      FString InputActionName;
+      Payload->TryGetStringField(TEXT("inputAction"), InputActionName);
+      if (InputActionName.IsEmpty()) {
+        SendAutomationError(RequestingSocket, RequestId,
+                            TEXT("inputAction required (e.g. \"IA_Move\" or \"/Game/Input/IA_Move\")"),
+                            TEXT("INVALID_ARGUMENT"));
+        return true;
+      }
+
+      // Resolve the asset path - support short names and full paths
+      FString ActionAssetPath = InputActionName;
+      if (!ActionAssetPath.StartsWith(TEXT("/"))) {
+        // Short name: try /Game/Input/{name}.{name} first
+        ActionAssetPath = FString::Printf(TEXT("/Game/Input/%s.%s"), *InputActionName, *InputActionName);
+      } else if (!ActionAssetPath.Contains(TEXT("."))) {
+        // Full path without object name: append .Name
+        FString BaseName = FPaths::GetBaseFilename(ActionAssetPath);
+        ActionAssetPath = FString::Printf(TEXT("%s.%s"), *InputActionName, *BaseName);
+      }
+
+      UInputAction *Action = LoadObject<UInputAction>(nullptr, *ActionAssetPath);
+      if (!Action) {
+        // Fallback: try finding via asset registry
+        FAssetRegistryModule &ARM = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+        TArray<FAssetData> Assets;
+        ARM.Get().GetAssetsByClass(UInputAction::StaticClass()->GetClassPathName(), Assets);
+        for (const FAssetData &AD : Assets) {
+          if (AD.AssetName.ToString() == InputActionName) {
+            Action = Cast<UInputAction>(AD.GetAsset());
+            break;
+          }
+        }
+      }
+      if (!Action) {
+        SendAutomationError(
+            RequestingSocket, RequestId,
+            FString::Printf(TEXT("InputAction '%s' not found (tried path '%s')"), *InputActionName, *ActionAssetPath),
+            TEXT("ASSET_NOT_FOUND"));
+        return true;
+      }
+
+      FGraphNodeCreator<UK2Node_EnhancedInputAction> NodeCreator(*TargetGraph);
+      UK2Node_EnhancedInputAction *EIANode = NodeCreator.CreateNode(false);
+      EIANode->InputAction = Action;
+      FinalizeAndReport(NodeCreator, EIANode);
+      return true;
+    }
+
     // ========== DYNAMIC FALLBACK: Create ANY node class by name ==========
     UClass *NodeClass = FindNodeClassByName(NodeType);
     if (NodeClass) {
@@ -986,6 +1045,63 @@ bool UMcpAutomationBridgeSubsystem::HandleBlueprintGraphAction(
         bHandled = true;
       }
 
+      // AnimGraph node specific properties
+      if (!bHandled) {
+        if (UAnimGraphNode_SequencePlayer* SeqPlayer = Cast<UAnimGraphNode_SequencePlayer>(TargetNode)) {
+          if (PropertyName.Equals(TEXT("Sequence"), ESearchCase::IgnoreCase)) {
+            UAnimSequence* AnimSeq = LoadObject<UAnimSequence>(nullptr, *Value);
+            if (AnimSeq) {
+              SeqPlayer->Node.SetSequence(AnimSeq);
+              bHandled = true;
+            } else {
+              SendAutomationError(RequestingSocket, RequestId,
+                FString::Printf(TEXT("Could not load AnimSequence: %s"), *Value),
+                TEXT("ASSET_NOT_FOUND"));
+              return true;
+            }
+          }
+        } else if (UAnimGraphNode_ModifyBone* ModifyBone = Cast<UAnimGraphNode_ModifyBone>(TargetNode)) {
+          if (PropertyName.Equals(TEXT("BoneToModify"), ESearchCase::IgnoreCase)) {
+            ModifyBone->Node.BoneToModify.BoneName = FName(*Value);
+            bHandled = true;
+          } else if (PropertyName.Equals(TEXT("TranslationMode"), ESearchCase::IgnoreCase)) {
+            double NumValue = 0.0;
+            if (!Payload->TryGetNumberField(TEXT("value"), NumValue)) {
+              NumValue = FCString::Atod(*Value);
+            }
+            ModifyBone->Node.TranslationMode = static_cast<EBoneModificationMode>(static_cast<int32>(NumValue));
+            bHandled = true;
+          } else if (PropertyName.Equals(TEXT("RotationMode"), ESearchCase::IgnoreCase)) {
+            double NumValue = 0.0;
+            if (!Payload->TryGetNumberField(TEXT("value"), NumValue)) {
+              NumValue = FCString::Atod(*Value);
+            }
+            ModifyBone->Node.RotationMode = static_cast<EBoneModificationMode>(static_cast<int32>(NumValue));
+            bHandled = true;
+          } else if (PropertyName.Equals(TEXT("ScaleMode"), ESearchCase::IgnoreCase)) {
+            double NumValue = 0.0;
+            if (!Payload->TryGetNumberField(TEXT("value"), NumValue)) {
+              NumValue = FCString::Atod(*Value);
+            }
+            ModifyBone->Node.ScaleMode = static_cast<EBoneModificationMode>(static_cast<int32>(NumValue));
+            bHandled = true;
+          }
+        } else if (UAnimGraphNode_SequenceEvaluator* SeqEval = Cast<UAnimGraphNode_SequenceEvaluator>(TargetNode)) {
+          if (PropertyName.Equals(TEXT("Sequence"), ESearchCase::IgnoreCase)) {
+            UAnimSequence* AnimSeq = LoadObject<UAnimSequence>(nullptr, *Value);
+            if (AnimSeq) {
+              SeqEval->Node.SetSequence(AnimSeq);
+              bHandled = true;
+            } else {
+              SendAutomationError(RequestingSocket, RequestId,
+                FString::Printf(TEXT("Could not load AnimSequence: %s"), *Value),
+                TEXT("ASSET_NOT_FOUND"));
+              return true;
+            }
+          }
+        }
+      }
+
       if (bHandled) {
         TargetGraph->NotifyGraphChanged();
         FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
@@ -1003,8 +1119,34 @@ bool UMcpAutomationBridgeSubsystem::HandleBlueprintGraphAction(
             TEXT("PROPERTY_NOT_SUPPORTED"));
       }
     } else {
-      SendAutomationError(RequestingSocket, RequestId, TEXT("Node not found."),
-                          TEXT("NODE_NOT_FOUND"));
+      // No node found — check for blueprint-level properties (e.g. TargetSkeleton on AnimBP)
+      if (PropertyName.Equals(TEXT("TargetSkeleton"), ESearchCase::IgnoreCase)) {
+        UAnimBlueprint* AnimBP = Cast<UAnimBlueprint>(Blueprint);
+        if (AnimBP) {
+          USkeleton* Skeleton = LoadObject<USkeleton>(nullptr, *Value);
+          if (Skeleton) {
+            AnimBP->TargetSkeleton = Skeleton;
+            FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBP);
+            TSharedPtr<FJsonObject> Result = MakeShared<FJsonObject>();
+            Result->SetStringField(TEXT("propertyName"), TEXT("TargetSkeleton"));
+            Result->SetStringField(TEXT("skeletonPath"), Value);
+            AddAssetVerification(Result, Blueprint);
+            SendAutomationResponse(RequestingSocket, RequestId, true,
+                                   TEXT("TargetSkeleton set."), Result);
+          } else {
+            SendAutomationError(RequestingSocket, RequestId,
+              FString::Printf(TEXT("Could not load skeleton: %s"), *Value),
+              TEXT("ASSET_NOT_FOUND"));
+          }
+        } else {
+          SendAutomationError(RequestingSocket, RequestId,
+            TEXT("TargetSkeleton can only be set on AnimBlueprints"),
+            TEXT("INVALID_BLUEPRINT_TYPE"));
+        }
+      } else {
+        SendAutomationError(RequestingSocket, RequestId, TEXT("Node not found."),
+                            TEXT("NODE_NOT_FOUND"));
+      }
     }
     return true;
   } else if (SubAction == TEXT("get_node_details")) {

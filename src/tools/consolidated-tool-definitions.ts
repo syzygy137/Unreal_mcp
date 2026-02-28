@@ -252,6 +252,7 @@ export const consolidatedToolDefinitions: ToolDefinition[] = [
         memberClass: commonSchemas.stringProp,
         targetClass: commonSchemas.stringProp,
         inputAxisName: commonSchemas.stringProp,
+        inputAction: commonSchemas.stringProp,
         inputPin: commonSchemas.pinName,
         outputPin: commonSchemas.pinName,
         // Compilation options
@@ -654,6 +655,9 @@ export const consolidatedToolDefinitions: ToolDefinition[] = [
         animPath: commonSchemas.assetPath,
         animAssetPath: commonSchemas.assetPath,
         animMontagePath: commonSchemas.assetPath,
+        assetPath: commonSchemas.assetPath,
+        blendTime: commonSchemas.numberProp,
+        blendOption: commonSchemas.stringProp,
         slotName: commonSchemas.stringProp,
         sectionName: commonSchemas.stringProp,
         notifyName: commonSchemas.stringProp,
