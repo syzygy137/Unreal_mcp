@@ -69,6 +69,7 @@ plugins/McpAutomationBridge/.clangd
 plugins/McpAutomationBridge/Source/McpAutomationBridge/ue_stubs.h
 .sisyphus
 .claude/
+!.claude/commands/
 .opencode/
 .clangd
 compile_commands_50.json
