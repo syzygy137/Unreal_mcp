@@ -297,8 +297,20 @@ When you discover a tool parameter that the C++ plugin reads but the TypeScript 
 If the C++ plugin itself doesn't support what you need:
 1. **Tell the user** what's missing and where the fix would go
 2. **Edit the C++ file** in `plugins/McpAutomationBridge/Source/McpAutomationBridge/Private/`
-3. **Copy to UE project**: The plugin source must be copied to the UE project's `Plugins/McpAutomationBridge/` folder
-4. **User must close UE, delete Binaries/Intermediate in the plugin folder, and reopen UE** to trigger a rebuild
+3. **Copy the modified file to the UE project**:
+   ```bash
+   cp plugins/McpAutomationBridge/Source/McpAutomationBridge/Private/<modified_file>.cpp \
+      <UE_PROJECT_PATH>/Plugins/McpAutomationBridge/Source/McpAutomationBridge/Private/
+   ```
+4. **User must do a clean rebuild** — this is REQUIRED or UE will use the old cached binary:
+   - Close Unreal Editor completely
+   - Delete the plugin's compiled output in the UE project:
+     ```
+     <UE_PROJECT_PATH>/Plugins/McpAutomationBridge/Binaries/
+     <UE_PROJECT_PATH>/Plugins/McpAutomationBridge/Intermediate/
+     ```
+   - Reopen the UE project — it will recompile the plugin from source automatically
+5. **Verify** by testing the new functionality after UE finishes loading
 
 Key source files:
 - `McpAutomationBridge_BlueprintGraphHandlers.cpp` — node creation, pin connections, node properties
